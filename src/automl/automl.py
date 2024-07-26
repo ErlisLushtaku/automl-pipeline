@@ -10,13 +10,14 @@ from typing import Any, Tuple
 import torch
 import random
 import numpy as np
+import pandas as pd
 import logging
 
 from torch import nn, optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision import transforms
 
-from automl.dummy_model import DummyNN
+from automl.model import ModifiedNet
 from automl.utils import calculate_mean_std
 
 
@@ -54,25 +55,41 @@ class AutoML:
                 transforms.Normalize(*calculate_mean_std(dataset_class)),
             ]
         )
+
+        self._augmentations = transforms.Compose(
+            [
+                transforms.RandomVerticalFlip(p=0.5),
+                transforms.RandomHorizontalFlip(p=0.5)
+            ]
+        )
+
         dataset = dataset_class(
             root="./data",
             split='train',
             download=True,
-            transform=self._transform
+            transform=transforms.Compose([self._transform, self._augmentations])
         )
-        train_loader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-        input_size = dataset_class.width * dataset_class.height * dataset_class.channels
+        ds_dir = dataset_class.__name__[:-7].lower()
+        with open(f"data/{ds_dir}/train.csv") as f:
+            train = pd.read_csv(f)
+            _, counts = np.unique(train["label"], return_counts=True)
+            class_weights = 1.0/counts
+            sample_weights = [class_weights[label] for label in train["label"]]
+            sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
+        train_loader = DataLoader(dataset, batch_size=64, sampler=sampler)
 
-        model = DummyNN(input_size, dataset_class.num_classes)
+        # model = CNNModel(dataset_class.height, dataset_class.width, dataset_class.channels, dataset_class.num_classes)
+        model = ModifiedNet(dataset_class.num_classes)
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.003)
+        optimizer = optim.Adam(model.parameters(), lr=0.003)            # tune hyperparameters, check for different optimizers
         
         model.train()
         for epoch in range(5):
             loss_per_batch = []
             for _, (data, target) in enumerate(train_loader):
                 optimizer.zero_grad()
+                data = torch.cat((data, data, data), 1)
                 output = model(data)
                 loss = criterion(output, target)
                 loss.backward()
@@ -99,6 +116,7 @@ class AutoML:
         self._model.eval()
         with torch.no_grad():
             for data, target in data_loader:
+                data = torch.cat((data, data, data), 1)
                 output = self._model(data)
                 predicted = torch.argmax(output, 1)
                 labels.append(target.numpy())
