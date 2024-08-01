@@ -17,6 +17,7 @@ import argparse
 import logging
 
 from automl.datasets import FashionDataset, FlowersDataset, EmotionsDataset
+from automl.hpo import HyperParameterOptimization
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +39,18 @@ def main(
 
     logger.info("Fitting AutoML")
 
+    hpo = HyperParameterOptimization()
+    hpo.run(dataset_class)
+    test_preds, test_labels = hpo.predict(dataset_class)
     # You do not need to follow this setup or API it's merely here to provide
     # an example of how your automl system could be used.
     # As a general rule of thumb, you should **never** pass in any
     # test data to your AutoML solution other than to generate predictions.
-    automl = AutoML(seed=seed)
-    # load the dataset and create a loader then pass it
-    automl.fit(dataset_class)
-    # Do the same for the test dataset
-    test_preds, test_labels = automl.predict(dataset_class)
+    # automl = AutoML(seed=seed)
+    # # load the dataset and create a loader then pass it
+    # automl.fit(dataset_class)
+    # # Do the same for the test dataset
+    # test_preds, test_labels = automl.predict(dataset_class)
 
     # Write the predictions of X_test to disk
     # This will be used by github classrooms to get a performance

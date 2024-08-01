@@ -29,8 +29,14 @@ class AutoML:
     def __init__(
         self,
         seed: int,
+        lr,
+        batch_size,
+        epochs
     ) -> None:
         self.seed = seed
+        self.lr = lr
+        self.batch_size = batch_size
+        self.epochs = epochs
         self._model: nn.Module | None = None
 
     def fit(
@@ -77,15 +83,15 @@ class AutoML:
             class_weights = 1.0/counts
             sample_weights = [class_weights[label] for label in train["label"]]
             sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
-        train_loader = DataLoader(dataset, batch_size=64, sampler=sampler)
+        train_loader = DataLoader(dataset, batch_size=self.batch_size, sampler=sampler)
 
         # model = CNNModel(dataset_class.height, dataset_class.width, dataset_class.channels, dataset_class.num_classes)
         model = ModifiedNet(dataset_class.num_classes)
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.003)            # tune hyperparameters, check for different optimizers
+        optimizer = optim.Adam(model.parameters(), lr=self.lr)    # tune hyperparameters, check for different optimizers
         
         model.train()
-        for epoch in range(5):
+        for epoch in range(self.epochs):
             loss_per_batch = []
             for _, (data, target) in enumerate(train_loader):
                 optimizer.zero_grad()
