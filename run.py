@@ -17,6 +17,7 @@ import argparse
 import logging
 
 from automl.datasets import FashionDataset, FlowersDataset, EmotionsDataset
+from automl.neps import optimize_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,8 @@ def main(
             raise ValueError(f"Invalid dataset: {args.dataset}")
 
     logger.info("Fitting AutoML")
+
+    best_config = optimize_pipeline(dataset_class)
 
     # You do not need to follow this setup or API it's merely here to provide
     # an example of how your automl system could be used.
