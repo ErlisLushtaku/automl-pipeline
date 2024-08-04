@@ -14,10 +14,11 @@ import pandas as pd
 import logging
 
 from torch import nn, optim
-from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision import transforms
 
-from automl.model import ModifiedNet
+from automl.model import Models
+from automl.datasets import DataSets, GenericDataLoader
+from automl.trainer import LR_Scheduler, Trainer
 from automl.utils import calculate_mean_std
 
 logger = logging.getLogger(__name__)
@@ -33,94 +34,72 @@ class AutoML:
         self._model: nn.Module | None = None
 
     def fit(
-            self,
-            dataset_class: Any,
+        self,
+        dataset_name: DataSets,
+        model: Models,
+        num_epochs: int = 5,
     ) -> AutoML:
         """A reference/toy implementation of a fitting function for the AutoML class.
         """
-        # set seed for pytorch training
-        random.seed(self.seed)
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-        torch.cuda.manual_seed(self.seed)
-
-        # Ensure deterministic behavior in CuDNN
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
+        ADE_MEAN = np.array([123.675, 116.280, 103.530]) / 255
+        ADE_STD = np.array([58.395, 57.120, 57.375]) / 255
         self._transform = transforms.Compose(
             [
                 transforms.ToTensor(),
-                transforms.Normalize(*calculate_mean_std(dataset_class)),
+                transforms.Normalize(ADE_MEAN, ADE_STD),
             ]
         )
 
         self._augmentations = transforms.Compose(
             [
-                transforms.RandomVerticalFlip(p=0.5),
-                transforms.RandomHorizontalFlip(p=0.5)
+                transforms.AutoAugment(),
             ]
         )
 
-        dataset = dataset_class(
-            root="./data",
-            split='train',
-            download=True,
-            transform=transforms.Compose([self._transform, self._augmentations])
+        dataloaders = GenericDataLoader(
+            dataset_name=dataset_name,
+            batch_size=64,
+            num_workers=0,
+            transform=self._transform,
+            augmentations=self._augmentations,
         )
 
-        ds_dir = dataset_class.__name__[:-7].lower()
-        with open(f"data/{ds_dir}/train.csv") as f:
-            train = pd.read_csv(f)
-            _, counts = np.unique(train["label"], return_counts=True)
-            class_weights = 1.0 / counts
-            sample_weights = [class_weights[label] for label in train["label"]]
-            sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
-        train_loader = DataLoader(dataset, batch_size=self.batch_size, sampler=sampler)
-
-        # model = CNNModel(dataset_class.height, dataset_class.width, dataset_class.channels, dataset_class.num_classes)
-        model = ModifiedNet(dataset_class.num_classes)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=self.lr)  # tune hyperparameters, check for different optimizers
-
-        model.train()
-        for epoch in range(self.epochs):
-            loss_per_batch = []
-            for _, (data, target) in enumerate(train_loader):
-                optimizer.zero_grad()
-                data = torch.cat((data, data, data), 1)
-                output = model(data)
-                loss = criterion(output, target)
-                loss.backward()
-                optimizer.step()
-                loss_per_batch.append(loss.item())
-            logger.info(f"Epoch {epoch + 1}, Loss: {np.mean(loss_per_batch)}")
-        model.eval()
-        self._model = model
-
-        return self
-
-    def predict(self, dataset_class) -> Tuple[np.ndarray, np.ndarray]:
-        """A reference/toy implementation of a prediction function for the AutoML class.
-        """
-        dataset = dataset_class(
-            root="./data",
-            split='test',
-            download=True,
-            transform=self._transform
+        kwargs = (
+            {
+            "img_height": dataset_name.factory.height,
+            "img_width": dataset_name.factory.width,
+            "channels": dataset_name.factory.channels,
+            }
+            if model == Models.cnn_model or model == Models.simple_cnn
+            else {}
         )
-        data_loader = DataLoader(dataset, batch_size=100, shuffle=False)
-        predictions = []
-        labels = []
-        self._model.eval()
-        with torch.no_grad():
-            for data, target in data_loader:
-                data = torch.cat((data, data, data), 1)
-                output = self._model(data)
-                predicted = torch.argmax(output, 1)
-                labels.append(target.numpy())
-                predictions.append(predicted.numpy())
-        predictions = np.concatenate(predictions)
-        labels = np.concatenate(labels)
 
-        return predictions, labels
+        model = model.factory(num_classes=dataset_name.factory.num_classes, **kwargs)
+
+        trainer = Trainer(
+            model=model,
+            results_file=results_file,
+            #HP
+            optimizer=optim.Adam(model.parameters(), lr=0.003),
+            loss_fn=nn.CrossEntropyLoss(),
+            lr_scheduler=LR_Scheduler.step,
+            lr=1e-4,
+            scheduler_gamma=0.97,
+            scheduler_step_size=200,
+            scheduler_step_every_epoch=False,
+        )
+
+        trainer.train(
+            epochs=num_epochs,
+            train_loader=dataloaders.train_loader,
+            val_loader=dataloaders.val_loader,
+            save_best_to=save_to,
+        )
+
+        # Evaluate on test set
+        trainer.load_model(save_to)
+        results = trainer.eval(dataloaders.test)
+        with open(str(results_file).replace(".csv", ".txt"), "w") as f:
+            f.write(str(results))
+
+

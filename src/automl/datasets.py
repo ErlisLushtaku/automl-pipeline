@@ -6,12 +6,19 @@ If you want to edit this file be aware that we will later
 """
 
 
+from collections import Counter
+from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional, Tuple, Union
+from time import time
+from typing import Any, Callable, Optional, Tuple, Type, Union
 
 import PIL.Image
+import numpy as np
 import pandas as pd
+from torchvision import transforms
+from torch.utils.data import Dataset, DataLoader, Sampler, WeightedRandomSampler
 from torchvision.datasets import VisionDataset
+from torch.utils.data.dataset import random_split
 from torchvision.datasets.utils import download_and_extract_archive, check_integrity
 
 
@@ -49,11 +56,9 @@ class BaseVisionDataset(VisionDataset):
         self,
         root: Union[str, Path],
         split: str = "train",
-        transform: Optional[Callable] = None,
-        target_transform: Optional[Callable] = None,
         download: bool = False,
     ) -> None:
-        super().__init__(root, transform=transform, target_transform=target_transform)
+        super().__init__(root)
         assert split in ["train", "test"], f"Split {split} not supported"
         self._split = split
         self._base_folder = Path(self.root) / self._dataset_name
@@ -108,17 +113,23 @@ class BaseVisionDataset(VisionDataset):
         else:
             raise ValueError(f"Unsupported number of channels: {self.channels}")
 
-        if self.transform:
-            image = self.transform(image)
-
-        if self.target_transform:
-            label = self.target_transform(label)
-
         return image, label
 
     def __len__(self) -> int:
         return len(self._image_files)
 
+class DataSets(Enum):
+    emotions = "emotions"
+    flowers = "flowers"
+    fashion = "fashion"
+
+    @property
+    def factory(self) -> Type[BaseVisionDataset]:
+        return {
+            DataSets.emotions: EmotionsDataset,
+            DataSets.flowers: FlowersDataset,
+            DataSets.fashion: FashionDataset,
+        }[self]
 
 class EmotionsDataset(BaseVisionDataset):
     """ Emotions Dataset.
@@ -164,3 +175,101 @@ class FashionDataset(BaseVisionDataset):
     height = 28
     channels = 1
     num_classes = 10
+
+class DatasetTransformer(Dataset):
+    def __init__(self, dataset: Dataset, transform: Callable = None):
+        self.dataset = dataset
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        image, label = self.dataset[idx]
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, label
+
+class GenericDataLoader:
+    def __init__(
+        self,
+        dataset_name: DataSets = DataSets.emotions.value,
+        batch_size: int = 64,
+        num_workers: int = 0,
+        transform: Callable = None,
+        augmentations: Callable = None,
+        root: Path = Path("./data"),
+        use_weighted_sampler: bool = True,
+        download: bool = True,
+    ):
+
+        self.train_val_dataset = dataset_name.factory(
+            root=root,
+            split="train",
+            download=download,
+        )
+
+        self.train_dataset, self.val_dataset = random_split(
+            self.train_val_dataset,
+            [
+                int(0.8 * len(self.train_val_dataset)),
+                len(self.train_val_dataset) - int(0.8 * len(self.train_val_dataset)),
+            ],
+        )
+
+        self.train_dataset = DatasetTransformer(
+            dataset=self.train_dataset,
+            transform=transforms.Compose([transform for transform in [augmentations, transform] if transform]),
+        )
+
+        self.val_dataset = DatasetTransformer(
+            dataset=self.val_dataset,
+            transform=transforms.Compose([transform]),
+        )
+
+        self.test_dataset = dataset_name.factory(
+            root=root,
+            split="test",
+            download=download,
+        )
+
+        self.test_dataset = DatasetTransformer(
+            dataset=self.test_dataset,
+            transform=transforms.Compose([transform]),
+        )
+
+        self.train_loader = DataLoader(
+            self.train_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            sampler= self.get_weighted_sampler() if use_weighted_sampler else None,
+            num_workers=num_workers,
+        )
+
+        self.val_loader = DataLoader(
+            self.val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+        )
+
+        self.test_loader = DataLoader(
+            self.test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+        )
+
+    def get_weighted_sampler(self) -> Sampler:
+        start = time()
+    
+        counts = Counter(label for _, label in self.train_dataset)
+        class_weights = {label: 1.0/count for label, count in counts.items()}
+        sample_weights = [class_weights[label] for _, label in self.train_dataset]
+        
+        print("Time to calculate class weights:", time() - start)
+
+        # Create and return the WeightedRandomSampler
+        return WeightedRandomSampler(sample_weights, len(sample_weights))

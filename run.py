@@ -7,117 +7,103 @@ to this and you will need to output your predictions for the images of the test 
 to a file, which we will grade using github classrooms!
 """
 from __future__ import annotations
+from time import time
 
+from torch import nn, optim
 from pathlib import Path
-from sklearn.metrics import accuracy_score
 import numpy as np
 from automl.automl import AutoML
-import argparse
-
+from typer import Typer
 import logging
+from torchvision import transforms
 
-from automl.datasets import FashionDataset, FlowersDataset, EmotionsDataset
-from automl.neps import optimize_pipeline
+from automl.datasets import DataSets, GenericDataLoader
+from automl.model import Models
+from automl.trainer import LR_Scheduler, Optimizer, Trainer
+from automl.utils import calculate_mean_std
 
+app = Typer()
 logger = logging.getLogger(__name__)
 
-
+@app.command()
 def main(
-    dataset: str,
-    output_path: Path,
-    seed: int,
+    dataset: DataSets = DataSets.fashion.value,
+    model: Models = Models.resnet18_1.value,
+    epochs: int = 1,
+    batch_size: int = 64,
+    results_file: Path = Path("results/results.csv"),
+    save_to: Path = Path("checkpoints/model.pt"),
 ):
-    match dataset:
-        case "fashion":
-            dataset_class = FashionDataset
-        case "flowers":
-            dataset_class = FlowersDataset
-        case "emotions":
-            dataset_class = EmotionsDataset
-        case _:
-            raise ValueError(f"Invalid dataset: {args.dataset}")
 
-    logger.info("Fitting AutoML")
-
-    best_config = optimize_pipeline(dataset_class)
-
-    # You do not need to follow this setup or API it's merely here to provide
-    # an example of how your automl system could be used.
-    # As a general rule of thumb, you should **never** pass in any
-    # test data to your AutoML solution other than to generate predictions.
-    automl = AutoML(seed=seed)
-    # load the dataset and create a loader then pass it
-    automl.fit(dataset_class)
-    # Do the same for the test dataset
-    test_preds, test_labels = automl.predict(dataset_class)
-
-    # Write the predictions of X_test to disk
-    # This will be used by github classrooms to get a performance
-    # on the test set.
-    logger.info("Writing predictions to disk")
-    with output_path.open("wb") as f:
-        np.save(f, test_preds)
-
-    # check if test_labels has missing data
-
-
-    if not np.isnan(test_labels).any():
-        acc = accuracy_score(test_labels, test_preds)
-        logger.info(f"Accuracy on test set: {acc}")
+    start = time()
+    if dataset.factory.height > 128 or dataset.factory.width > 128:
+        transform = transforms.Compose(
+        [
+            transforms.Resize((128, 128)),
+            transforms.ToTensor(),
+            transforms.Normalize(*calculate_mean_std(dataset)),
+        ]
+    )
     else:
-        # This is the setting for the exam dataset, you will not have access to the labels
-        logger.info(f"No test split for dataset '{dataset}'")
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(*calculate_mean_std(dataset)),
+            ]
+        )
+    print("Time to calculate mean and std:", time() - start)
+    augmentations = transforms.Compose(
+        [
+            transforms.AutoAugment(),
+        ]
+    )
 
+    dataloaders = GenericDataLoader(
+        dataset_name=dataset,
+        batch_size=batch_size,
+        num_workers=0,
+        transform=transform,
+        augmentations=augmentations,
+    )
 
+    kwargs = (
+        {
+        "img_height": dataset.factory.height,
+        "img_width": dataset.factory.width,
+        "channels": dataset.factory.channels,
+        }
+        if model == Models.cnn_model or model == Models.simple_cnn
+        else {}
+    )
+
+    model = model.factory(num_classes=dataset.factory.num_classes, **kwargs)
+    trainer = Trainer(
+        model=model,
+        results_file=results_file,
+        #HP
+        optimizer=Optimizer.adamw,
+        loss_fn=nn.CrossEntropyLoss(),
+        lr_scheduler=LR_Scheduler.step,
+        lr=1e-3,
+        scheduler_gamma=0.97,
+        scheduler_step_size=200,
+        scheduler_step_every_epoch=False,
+        weight_decay=1e-2,
+    )
+    
+    trainer.train(
+        epochs=epochs,
+        train_loader=dataloaders.train_loader,
+        val_loader=dataloaders.val_loader,
+        save_best_to=save_to,
+        num_classes=dataset.factory.num_classes,
+    )
+
+    # Evaluate on test set
+    trainer.load_model(save_to)
+    results = trainer.eval(data_loader=dataloaders.test_loader, num_classes=dataset.factory.num_classes)
+    with open(str(results_file).replace(".csv", ".txt"), "w") as f:
+        f.write(str(results))
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--dataset",
-        type=str,
-        required=True,
-        help="The name of the dataset to run on.",
-        choices=["fashion", "flowers", "emotions"]
-    )
-    parser.add_argument(
-        "--output-path",
-        type=Path,
-        default=Path("predictions.npy"),
-        help=(
-            "The path to save the predictions to."
-            " By default this will just save to './predictions.npy'."
-        )
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help=(
-            "Random seed for reproducibility if you are using and randomness,"
-            " i.e. torch, numpy, pandas, sklearn, etc."
-        )
-    )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Whether to log only warnings and errors."
-    )
-
-    args = parser.parse_args()
-
-    if not args.quiet:
-        logging.basicConfig(level=logging.INFO)
-    else:
-        logging.basicConfig(level=logging.WARNING)
-
-    logger.info(
-        f"Running dataset {args.dataset}"
-        f"\n{args}"
-    )
-
-    main(
-        dataset=args.dataset,
-        output_path=args.output_path,
-        seed=args.seed,
-    )
+    app()
