@@ -33,6 +33,7 @@ def get_augmentations():
             transforms.AutoAugment(),
         ]
     )
+
 LOADERS = None
 def get_data_loaders(dataset, batch_size, transform, augmentations):
     global LOADERS
@@ -42,7 +43,7 @@ def get_data_loaders(dataset, batch_size, transform, augmentations):
         num_workers=0,
         transform=transform,
         augmentations=augmentations,
-        use_weighted_sampler=False,
+        use_weighted_sampler=True,
     )
 
 def get_model(model, dataset):
@@ -92,18 +93,21 @@ def run_pipeline(lr, batch_size, epochs, seed, dataset, model, results_file, sav
         weight_decay=1e-2,
         seed=seed,
     )
+    if TRANSFORMS is None:
+        get_transformations(dataset)
 
-    dataloaders = get_data_loaders(
-        dataset,
-        batch_size,
-        get_transformations(dataset) if TRANSFORMS is None else TRANSFORMS,
-        get_augmentations() if LOADERS is None else LOADERS,
-    )
+    if LOADERS is None:
+        get_data_loaders(
+            dataset,
+            batch_size,
+            TRANSFORMS,
+            get_augmentations(),
+        )
 
     _, _, validation_losses, _, _ =trainer.train(
         epochs=epochs,
-        train_loader=dataloaders.train_loader,
-        val_loader=dataloaders.val_loader,
+        train_loader=LOADERS.train_loader,
+        val_loader=LOADERS.val_loader,
         save_best_to=save_to,
         num_classes=dataset.factory.num_classes,
     )
@@ -134,8 +138,8 @@ def optimize_pipeline(
         run_pipeline=wrapped_run_pipeline,
         pipeline_space=pipeline_space,
         root_directory='neps_root_directory',
-        max_evaluation_total=100,
-        max_cost_total=200,
+        max_evaluation_total=5,
+        max_cost_total=10,
         overwrite_working_directory=True,
     )
     # TODO: get best config after neps finishes optimzing
