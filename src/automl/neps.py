@@ -96,19 +96,11 @@ def run_pipeline(lr, batch_size, epochs, seed, dataset, model, results_file, sav
     dataloaders = get_data_loaders(
         dataset,
         batch_size,
-<<<<<<< HEAD
         get_transformations(dataset) if TRANSFORMS is None else TRANSFORMS,
         get_augmentations() if LOADERS is None else LOADERS,
     )
 
     _, _, validation_losses, _, _ =trainer.train(
-=======
-        get_transformations(dataset),
-        get_augmentations(),
-    )
-
-    _, _, validation_losses, _ =trainer.train(
->>>>>>> 07da5d75e6c7c14b39acac2582f42d4d7f3df707
         epochs=epochs,
         train_loader=dataloaders.train_loader,
         val_loader=dataloaders.val_loader,
