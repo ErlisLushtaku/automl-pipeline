@@ -62,7 +62,7 @@ def get_model(model, dataset):
 pipeline_space = {
     "lr": neps.FloatParameter(lower=1e-5, upper=1e-1, log=True),
     "batch_size": neps.IntegerParameter(lower=32, upper=128),
-    "epochs": neps.IntegerParameter(lower=1, upper=2),
+    "epochs": neps.IntegerParameter(lower=1, upper=2, is_fidelity=True),
     "seed": neps.IntegerParameter(lower=0, upper=10000),
 }
 
@@ -88,7 +88,7 @@ def run_pipeline(pipeline_directory, previous_pipeline_directory, lr, batch_size
     else:
         trainer.epochs_already_trained = 0
     
-    epoch_spent_in_this_call = epochs - trainer.epochs_already_trained
+    epochs_spent_in_this_call = epochs - trainer.epochs_already_trained
 
     training_losses, training_accuracies, validation_losses, validation_accuracies, f1s, training_time = trainer.train(
         epochs=epochs,
@@ -106,7 +106,16 @@ def run_pipeline(pipeline_directory, previous_pipeline_directory, lr, batch_size
     )
 
     trainer.save(pipeline_directory / checkpoint_name)
-    return dict(loss=validation_losses[-1], cost=epoch_spent_in_this_call, training_losses=training_losses, training_accuracies=training_accuracies, validation_losses=validation_losses, validation_accuracies=validation_accuracies, f1s=f1s, training_time=training_time)
+    return dict(
+        loss=validation_losses[-1],
+        cost=epochs_spent_in_this_call,
+        training_losses=training_losses,
+        training_accuracies=training_accuracies,
+        validation_losses=validation_losses,
+        validation_accuracies=validation_accuracies,
+        f1s=f1s,
+        training_time=training_time
+    )
 
 
 def optimize_pipeline(
@@ -117,7 +126,6 @@ def optimize_pipeline(
 ):
 
     def wrapped_run_pipeline(pipeline_directory, previous_pipeline_directory, lr, batch_size, epochs, seed):
-        print(f"epochs: {epochs}")
         return run_pipeline(
             pipeline_directory=pipeline_directory,
             previous_pipeline_directory=previous_pipeline_directory,
@@ -134,7 +142,7 @@ def optimize_pipeline(
     neps_result = neps.run(
         run_pipeline=wrapped_run_pipeline,
         pipeline_space=pipeline_space,
-        root_directory = "hyperband_neps",
+        root_directory = dataset.factory.__name__ + "_neps",
         searcher='hyperband',
         max_cost_total=5,
         overwrite_working_directory=True,

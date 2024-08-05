@@ -53,7 +53,7 @@ commands = [
 ]
 
 def run_command(env_name: str, command: str):
-    command = f"conda activate {env_name} && {command}'"
+    command = f"conda activate {env_name} && {command}"
     os.system(command)
 
 def run_experiments(commands):
