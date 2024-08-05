@@ -11,7 +11,7 @@ def command_factory(
     batch_size: int = 64,
 ):
     return (
-        f"python run.py --dataset {dataset.value} --model {model.value} --batch-size {batch_size} --epochs {epochs}"
+        f"python run.py --dataset {dataset.value} --model {model.value}"
         f" --results-file results/{name}.csv --save-to checkpoints/{name}.pt"
     )
 

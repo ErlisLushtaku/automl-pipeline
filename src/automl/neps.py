@@ -35,7 +35,7 @@ def get_augmentations():
     )
 
 LOADERS = None
-def get_data_loaders(dataset, batch_size, transform, augmentations):
+def get_data_loaders(dataset, transform, augmentations, batch_size):
     global LOADERS
     LOADERS = GenericDataLoader(
         dataset_name=dataset,
@@ -60,55 +60,59 @@ def get_model(model, dataset):
     return model.factory(num_classes=dataset.factory.num_classes, **kwargs)
 
 pipeline_space = {
-    "lr": neps.FloatParameter(lower=1e-5, upper=1e-1, log=True),
-    "batch_size": neps.IntegerParameter(lower=32, upper=128),
-    "epochs": neps.IntegerParameter(lower=1, upper=2, is_fidelity=True),
-    "seed": neps.IntegerParameter(lower=0, upper=10000),
+    "lr": neps.FloatParameter(lower=1e-4, upper=1e-2, log=True, default=1e-3, default_confidence="high"),
+    "scheduler_gamma": neps.FloatParameter(lower=0.1, upper=0.99, default=0.97, default_confidence="medium"),
+    "scheduler_step_size": neps.IntegerParameter(lower=5, upper=1000, default=30, default_confidence="medium"),
+    "weight_decay": neps.FloatParameter(lower=1e-6, upper=1e-2, default=1e-4, default_confidence="high"),
+    "epochs": neps.IntegerParameter(lower=1, upper=20, is_fidelity=True),
 }
 
-def run_pipeline(pipeline_directory, previous_pipeline_directory, lr, batch_size, epochs, seed, dataset, model, results_file, save_to):
+
+def run_pipeline(pipeline_directory, previous_pipeline_directory, dataset, model, **config):
+    start = time()
+
     trainer = Trainer(
         model = get_model(model, dataset),
-        results_file=results_file,
         optimizer=Optimizer.adamw,
         loss_fn=nn.CrossEntropyLoss(),
         lr_scheduler=LR_Scheduler.step,
-        lr=lr,
-        scheduler_gamma=0.97,
-        scheduler_step_size=200,
+        lr=config["lr"],
+        scheduler_gamma=config["scheduler_gamma"],
+        scheduler_step_size=config["scheduler_step_size"],
         scheduler_step_every_epoch=False,
-        weight_decay=1e-2,
-        seed=seed,
+        weight_decay=config["weight_decay"],
     )
+
     checkpoint_name = "checkpoint.pth"
 
     if previous_pipeline_directory is not None:
-        
         trainer.load(previous_pipeline_directory / checkpoint_name)
     else:
         trainer.epochs_already_trained = 0
     
-    epochs_spent_in_this_call = epochs - trainer.epochs_already_trained
+    epochs_spent_in_this_call = config["epochs"] - trainer.epochs_already_trained
 
-    training_losses, training_accuracies, validation_losses, validation_accuracies, f1s, training_time = trainer.train(
-        epochs=epochs,
+    training_losses, training_accuracies, validation_losses, validation_accuracies, f1s, _ = trainer.train(
+        epochs=config["epochs"],
         train_loader=(
             get_data_loaders(
                 dataset,
-                batch_size,
                 get_transformations(dataset) if TRANSFORMS is None else TRANSFORMS,
-                get_augmentations()
+                get_augmentations(),
+                batch_size=32,
             ).train_loader if LOADERS is None else LOADERS.train_loader
         ),
         val_loader=LOADERS.val_loader,
-        save_best_to=save_to,
         num_classes=dataset.factory.num_classes,
     )
 
     trainer.save(pipeline_directory / checkpoint_name)
+
+    end = time()
+
     return dict(
         loss=validation_losses[-1],
-        cost=epochs_spent_in_this_call,
+        cost=end - start,
         training_losses=training_losses,
         training_accuracies=training_accuracies,
         validation_losses=validation_losses,
@@ -121,30 +125,24 @@ def run_pipeline(pipeline_directory, previous_pipeline_directory, lr, batch_size
 def optimize_pipeline(
     dataset: DataSets = DataSets.fashion.value,
     model: Models = Models.resnet18_1.value,
-    results_file: Path = Path("results/results.csv"),
-    save_to: Path = Path("checkpoints/model.pt"),
 ):
 
-    def wrapped_run_pipeline(pipeline_directory, previous_pipeline_directory, lr, batch_size, epochs, seed):
+    def wrapped_run_pipeline(pipeline_directory, previous_pipeline_directory, **config):
         return run_pipeline(
             pipeline_directory=pipeline_directory,
             previous_pipeline_directory=previous_pipeline_directory,
-            lr=lr,
-            batch_size=batch_size,
-            epochs=epochs,
-            seed=seed,
             dataset=dataset,
             model=model,
-            results_file=results_file,
-            save_to=save_to,
+            **config
         )
 
     neps_result = neps.run(
         run_pipeline=wrapped_run_pipeline,
         pipeline_space=pipeline_space,
         root_directory = dataset.factory.__name__ + "_neps",
-        searcher='hyperband',
-        max_cost_total=5,
+        searcher='priorband_bo',
+        initial_design_size=5,
+        max_cost_total=9*60*60,
         overwrite_working_directory=True,
     )
     # TODO: get best config after neps finishes optimzing

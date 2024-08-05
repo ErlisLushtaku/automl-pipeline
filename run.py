@@ -22,15 +22,11 @@ logger = logging.getLogger(__name__)
 def main(
     dataset: DataSets = DataSets.fashion.value,
     model: Models = Models.resnet18_1.value,
-    results_file: Path = Path("results/results.csv"),
-    save_to: Path = Path("checkpoints/model.pt"),
 ):
 
     optimize_pipeline(
         dataset=dataset,
         model=model,
-        results_file=results_file,
-        save_to=save_to,
     )
 
 if __name__ == "__main__":
