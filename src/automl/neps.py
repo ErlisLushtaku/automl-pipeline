@@ -118,7 +118,6 @@ def run_pipeline(pipeline_directory, previous_pipeline_directory, dataset, model
         validation_losses=validation_losses,
         validation_accuracies=validation_accuracies,
         f1s=f1s,
-        training_time=training_time
     )
 
 
