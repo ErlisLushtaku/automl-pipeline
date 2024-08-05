@@ -134,9 +134,9 @@ def optimize_pipeline(
     neps_result = neps.run(
         run_pipeline=wrapped_run_pipeline,
         pipeline_space=pipeline_space,
-        root_directory = dataset.__class__.__name__ + "_neps",
-        searcher='random_search',
-        max_cost_total=3,
+        root_directory = "hyperband_neps",
+        searcher='hyperband',
+        max_cost_total=5,
         overwrite_working_directory=True,
     )
     # TODO: get best config after neps finishes optimzing
