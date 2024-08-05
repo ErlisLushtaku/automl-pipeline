@@ -182,7 +182,7 @@ class Trainer:
 
         losses, accuracies = [], []
         val_losses, val_accuracies = [], []
-        mious, f1s = [], []
+        f1s = []
         timing = []
         best_val_accuracy = 0.0
 
@@ -192,14 +192,14 @@ class Trainer:
             )
             self.epochs_already_trained = epochs
 
-            val_loss, val_accuracy, miou, f1, confusion_matrix, _ = self.eval(
+            val_loss, val_accuracy, f1, confusion_matrix, _ = self.eval(
                 val_loader, epoch, epochs, num_classes=num_classes
             )
 
             if best_val_accuracy < val_accuracy:
                 best_val_accuracy = val_accuracy
                 if save_best_to is not None:
-                    self.save_model(save_best_to)
+                    self.save(save_best_to)
 
             print(
                 f"Epoch {epoch}/{epochs} (Overall Values) - "
@@ -207,7 +207,6 @@ class Trainer:
                 f"Train Accuracy: {train_accuracy:.4f}, "
                 f"Val Loss: {val_loss:.4f}, "
                 f"Val Accuracy: {val_accuracy:.4f}, "
-                f"mIoU: {miou:.4f}, "
                 f"F1 Score: {f1:.4f}",
             )
 
@@ -227,32 +226,10 @@ class Trainer:
             accuracies.append(train_accuracy)
             val_losses.append(val_loss)
             val_accuracies.append(val_accuracy)
-            mious.append(miou)
             f1s.append(f1)
             timing.append(time() - start_time)
-        if self.results_file is not None:
-            print(self.results_file)
-            data = {
-                "epoch": range(1, epochs + 1),
-                "train_loss": losses,
-                "train_accuracy": accuracies,
-                "val_loss": val_losses,
-                "val_accuracy": val_accuracies,
-                "mIoU": mious,
-                "f1": f1s,
-                "training_time": timing,
-            }
-            with open(self.results_file, "w") as f: 
-                f.write(
-                    "epoch,train_loss,train_accuracy,val_loss,val_accuracy,mIoU,f1,training_time\n"
-                )
-                for i in range(epochs):
-                    f.write(
-                        f"{data['epoch'][i]},{data['train_loss'][i]},{data['train_accuracy'][i]},{data['val_loss'][i]},"
-                        f"{data['val_accuracy'][i]},{data['mIoU'][i]},{data['f1'][i]},{data['training_time'][i]}\n"
-                    )
 
-        return losses, accuracies, val_losses, val_accuracies, time() - start_time
+        return losses, accuracies, val_losses, val_accuracies, f1s, time() - start_time
 
     def eval_step(
         self,
@@ -319,14 +296,6 @@ class Trainer:
 
             self.model.train()
 
-            # Calculate mIoU
-            iou = confusion_matrix.diag() / (
-                confusion_matrix.sum(dim=0)
-                + confusion_matrix.sum(dim=1)
-                - confusion_matrix.diag()
-            ).clamp(min=1e-6)
-            miou = iou.mean()
-
             # Calculate F1 Score
             precision = confusion_matrix.diag() / confusion_matrix.sum(dim=0).clamp(
                 min=1e-6
@@ -345,7 +314,6 @@ class Trainer:
             return (
                 cumulative_loss / len(data_loader),
                 cumulative_accuracy / len(data_loader),
-                miou.item(),
                 f1.item(),
                 confusion_matrix,
                 predictions if return_predictions else None,
@@ -407,17 +375,3 @@ class Trainer:
         self.optimizer.load_state_dict(checkpoint["optimizer"])
         self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
         self.epochs_already_trained = checkpoint["epochs_already_trained"]
-
-    def save_model(self, path: Union[str, Path, None] = None):
-        path = Path(path or f"models/{self._model_name}.pt")
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        torch.save(self.model.state_dict(), path)
-
-    def load_model(self, path: Union[str, Path, None] = None):
-        path = Path(path or f"models/{self._model_name}.pt")
-
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist")
-
-        self.model.load_state_dict(torch.load(path, map_location=self.device))

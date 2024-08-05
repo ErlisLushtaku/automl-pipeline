@@ -122,6 +122,7 @@ class DataSets(Enum):
     emotions = "emotions"
     flowers = "flowers"
     fashion = "fashion"
+    cancer = "cancer"
 
     @property
     def factory(self) -> Type[BaseVisionDataset]:
@@ -129,6 +130,7 @@ class DataSets(Enum):
             DataSets.emotions: EmotionsDataset,
             DataSets.flowers: FlowersDataset,
             DataSets.fashion: FashionDataset,
+            DataSets.cancer: SkinCancerDataset,
         }[self]
 
 class EmotionsDataset(BaseVisionDataset):
@@ -175,6 +177,24 @@ class FashionDataset(BaseVisionDataset):
     height = 28
     channels = 1
     num_classes = 10
+
+class SkinCancerDataset(BaseVisionDataset):
+    """SkinCancer Dataset.
+    The SkinCancer dataset contains images of skin lesions. The task is to classify what kind of skin lesion it is.
+
+    This is the test dataset for the AutoML exam.  It does not contain the labels for the test split.
+    You are expected to predict these labels and save them to a file called final_test_preds.npy for your
+    final submission.
+    """
+
+    _download_file = ("skin_cancer.tgz", "cf807a5c6c29ea1d97e660abb3be88ad")
+    _dataset_name = "skin_cancer"
+    _md5_train = "ac619f9de4defd5babc322fbc400907b"
+    _md5_test = "7a5c1f129e2c837e410081dbf68424f9"
+    width = 450
+    height = 450
+    channels = 3
+    num_classes= 7
 
 class DatasetTransformer(Dataset):
     def __init__(self, dataset: Dataset, transform: Callable = None):
