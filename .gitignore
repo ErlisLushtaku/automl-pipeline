@@ -8,9 +8,6 @@
 # YAML files
 *.yaml
 
-# NumPy files
-*.npy
-
 # JSON files
 *.json
 
