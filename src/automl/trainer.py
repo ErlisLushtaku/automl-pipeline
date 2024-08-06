@@ -335,7 +335,7 @@ class Trainer:
                 cumulative_accuracy / len(data_loader),
                 f1.item(),
                 confusion_matrix,
-                predictions if return_predictions else None,
+                all_predictions if return_predictions else None,
             )
 
     def predict(self, x: Union[torch.Tensor, DataLoader]) -> torch.Tensor:
