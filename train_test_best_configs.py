@@ -33,6 +33,7 @@ def train_test_best_configs(
         scheduler_step_size=best_config["scheduler_step_size"],
         scheduler_step_every_epoch=False,
         weight_decay=best_config["weight_decay"],
+        results_file=SEED_DIR_TEMPLATE.format(seed, dataset, "results.csv")
     )
 
     data_loaders = get_data_loaders(
