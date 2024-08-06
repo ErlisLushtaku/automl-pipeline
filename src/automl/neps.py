@@ -9,6 +9,7 @@ from automl.trainer import LR_Scheduler, Optimizer, Trainer
 from automl.utils import calculate_mean_std
 from automl.llambo_utils import generate_init_conf, get_config_space, fetch_statistics, read_description_file
 from openai import OpenAI
+
 import ConfigSpace as CS
 # Define a global variable to store the transformations
 TRANSFORMS = None
@@ -121,9 +122,10 @@ def get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context
         for param_name, param in pipeline_space.items():
             if param_name != "epochs":
                 try:
-                    value = type(param.default)(llm_config[param_name])
-                    if param.lower <= value <= param.upper:
-                        param.default = llm_config[param_name]
+                    value = type(param.default)(llm_config[param_name]["value"])
+                    if param.lower <= value <= param.upper and llm_config[param_name]["confidence"] in ["high", "medium", "low"]:
+                        param.default = llm_config[param_name]["value"]
+                        param.default_confidence_choice = llm_config[param_name]["confidence"]
                     else:
                         raise ValueError(f"Value for {param_name} out of range!")
                 except ValueError:
@@ -215,6 +217,7 @@ def get_task_context(dataset, model, data_loaders):
 def optimize_pipeline(
         dataset: DataSets = DataSets.fashion.value,
         model: Models = Models.resnet18_1.value,
+        apikey: str = None,
 ):
     data_loaders = get_data_loaders(
         dataset,
@@ -239,10 +242,9 @@ def optimize_pipeline(
     #     modified_pipeline_space = get_pipeline_space_from_user(pipeline_space)
     # else:
     n_initial_samples = 1
+
     client = OpenAI(
-        organization='org-HIWwqsnxyBU3xMl6PkwdjxdN',
-        project='proj_g30ZlMFGBNu4qsUctIhNI5B3',
-        api_key='sk-proj-cTiFSkfqsowfmg6FId0iT3BlbkFJfDi43ms9k13R9bKElYE1'
+        api_key=apikey
     )
     config_space, _ = get_config_space(config)
     print('config_space', config_space)
@@ -257,7 +259,7 @@ def optimize_pipeline(
         root_directory=dataset.factory.__name__ + "_neps",
         searcher='priorband_bo',
         initial_design_size=5,
-        max_cost_total=9 * 60 * 60,
+        max_cost_total=5 * 60 * 60,
         overwrite_working_directory=True,
     )
     # TODO: get best config after neps finishes optimizing

@@ -24,7 +24,7 @@ def generate_init_conf(n_samples, client, context='Full_Context', task_context=N
     )
     config = extract_configs_from_response(response)
 
-    return obtain_all_list_valid(config, config_space)[0]
+    return config
 
 
 def extract_configs_from_response(response):

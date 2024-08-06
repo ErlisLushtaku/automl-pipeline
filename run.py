@@ -22,11 +22,12 @@ logger = logging.getLogger(__name__)
 def main(
     dataset: DataSets = DataSets.fashion.value,
     model: Models = Models.resnet18_1.value,
+    apikey: str = None
 ):
-
     optimize_pipeline(
         dataset=dataset,
         model=model,
+        apikey=apikey,
     )
 
 if __name__ == "__main__":
