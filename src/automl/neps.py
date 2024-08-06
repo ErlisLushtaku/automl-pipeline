@@ -1,3 +1,6 @@
+import random
+import math
+
 import neps
 from torch import nn
 from time import time
@@ -75,8 +78,8 @@ pipeline_space = {
     "lr": neps.FloatParameter(lower=1e-4, upper=1e-2, log=True, default=1e-3, default_confidence="high"),
     "scheduler_gamma": neps.FloatParameter(lower=0.1, upper=0.99, default=0.97, default_confidence="medium"),
     "scheduler_step_size": neps.IntegerParameter(lower=5, upper=1000, default=30, default_confidence="medium"),
-    "weight_decay": neps.FloatParameter(lower=1e-6, upper=1e-2, default=1e-4, default_confidence="high"),
-    "epochs": neps.IntegerParameter(lower=1, upper=20, is_fidelity=True),
+    "weight_decay": neps.FloatParameter(lower=1e-6, upper=1e-2, log=True, default=1e-4, default_confidence="high"),
+    "epochs": neps.IntegerParameter(lower=1, upper=27, is_fidelity=True),
 }
 
 config = {
@@ -92,9 +95,10 @@ config = {
 
 def get_pipeline_space_from_user(pipeline_space):
     for param_name, param in pipeline_space.items():
-        if param_name != "epochs":  # Skip input for the fidelity parameter 'epochs'
+        if not param.is_fidelity:  # Skip input for the fidelity parameter 'epochs'
             param.default = get_user_input(param_name, param)
     return pipeline_space
+
 
 def get_user_input(param_name, param):
     while True:
@@ -112,7 +116,7 @@ def get_user_input(param_name, param):
             print(f"Invalid input! Please enter a valid value for {param_name}.")
 
 
-def get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context', task_context=None, config_space=None):
+def get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context', task_context=None, config_space=None, pipeline_space=None):
     retries = 0
 
     while retries < 5:
@@ -120,7 +124,7 @@ def get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context
         all_params_ok = True
 
         for param_name, param in pipeline_space.items():
-            if param_name != "epochs":
+            if not param.is_fidelity:
                 try:
                     value = type(param.default)(llm_config[param_name]["value"])
                     if param.lower <= value <= param.upper and llm_config[param_name]["confidence"] in ["high", "medium", "low"]:
@@ -137,6 +141,20 @@ def get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context
         retries += 1
 
     # If all retries are exhausted, return pipeline_space with default values
+    return pipeline_space
+
+
+def get_pipeline_space_randomly(pipeline_space):
+    for param_name, param in pipeline_space.items():
+        if not param.is_fidelity:
+            if isinstance(param, neps.FloatParameter):
+                if param.log:
+                    param.default = math.exp(random.uniform(math.log(param.lower), math.log(param.upper)))
+                else:
+                    param.default = random.uniform(param.lower, param.upper)
+            elif isinstance(param, neps.IntegerParameter):
+                param.default = random.randint(param.lower, param.upper)
+            param.default_confidence_choice = "low"
     return pipeline_space
 
 
@@ -218,6 +236,7 @@ def optimize_pipeline(
         dataset: DataSets = DataSets.fashion.value,
         model: Models = Models.resnet18_1.value,
         apikey: str = None,
+        random_init: bool = False
 ):
     data_loaders = get_data_loaders(
         dataset,
@@ -236,21 +255,27 @@ def optimize_pipeline(
             **config
         )
 
-    # user_wants_to_provide_values = input(
-    #     "Do you want to provide manual values for hyperparameters or do you want to ask an LLM? (manual/llm): ").strip().lower()
-    # if user_wants_to_provide_values in ['manual', 'm']:
-    #     modified_pipeline_space = get_pipeline_space_from_user(pipeline_space)
-    # else:
-    n_initial_samples = 1
 
-    client = OpenAI(
-        api_key=apikey
-    )
-    config_space, _ = get_config_space(config)
-    print('config_space', config_space)
-    task_context = get_task_context(dataset, model, data_loaders)
-    print("task_context", task_context)
-    modified_pipeline_space = get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context', task_context=task_context, config_space=config_space)
+    if random_init:
+        print("Randomly initializing hyperparameters.")
+        modified_pipeline_space = get_pipeline_space_randomly(pipeline_space)
+    else:
+        # user_wants_to_provide_values = input(
+        #     "Do you want to provide manual values for hyperparameters or do you want to ask an LLM? (manual/llm): ").strip().lower()
+        # if user_wants_to_provide_values in ['manual', 'm']:
+        #     print("Manually providing hyperparameters.")
+        #     modified_pipeline_space = get_pipeline_space_from_user(pipeline_space)
+        # else:
+        print("Asking LLM for hyperparameters.")
+        n_initial_samples = 1
+        client = OpenAI(
+            api_key=apikey
+        )
+        config_space, _ = get_config_space(config)
+        print('config_space', config_space)
+        task_context = get_task_context(dataset, model, data_loaders)
+        print("task_context", task_context)
+        modified_pipeline_space = get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context', task_context=task_context, config_space=config_space, pipeline_space=pipeline_space)
 
     print('modified_pipeline_space', modified_pipeline_space)
     neps_result = neps.run(
@@ -259,8 +284,9 @@ def optimize_pipeline(
         root_directory=dataset.factory.__name__ + "_neps",
         searcher='priorband_bo',
         initial_design_size=5,
-        max_cost_total=1 * 60 * 60,
+        max_cost_total=5 * 60 * 60,
         overwrite_working_directory=True,
     )
+
     # TODO: get best config after neps finishes optimizing
     return neps_result
