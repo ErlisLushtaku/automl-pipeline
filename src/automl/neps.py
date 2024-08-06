@@ -259,7 +259,7 @@ def optimize_pipeline(
         root_directory=dataset.factory.__name__ + "_neps",
         searcher='priorband_bo',
         initial_design_size=5,
-        max_cost_total=5 * 60 * 60,
+        max_cost_total=1 * 60 * 60,
         overwrite_working_directory=True,
     )
     # TODO: get best config after neps finishes optimizing
