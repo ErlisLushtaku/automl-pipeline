@@ -107,6 +107,8 @@ def fetch_statistics(data_loaders):
 
 def read_description_file(dataset_name):
     # Define the path to the file
+    if dataset_name == 'cancer':
+        dataset_name = 'skin_cancer'
     file_path = Path(f'./data/{dataset_name}/description.md')
 
     # Open the file and read its content
