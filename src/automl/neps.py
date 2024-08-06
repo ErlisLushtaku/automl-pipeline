@@ -255,27 +255,31 @@ def optimize_pipeline(
             **config
         )
 
-
     if random_init:
         print("Randomly initializing hyperparameters.")
         modified_pipeline_space = get_pipeline_space_randomly(pipeline_space)
     else:
-        # user_wants_to_provide_values = input(
-        #     "Do you want to provide manual values for hyperparameters or do you want to ask an LLM? (manual/llm): ").strip().lower()
-        # if user_wants_to_provide_values in ['manual', 'm']:
-        #     print("Manually providing hyperparameters.")
-        #     modified_pipeline_space = get_pipeline_space_from_user(pipeline_space)
-        # else:
-        print("Asking LLM for hyperparameters.")
-        n_initial_samples = 1
-        client = OpenAI(
-            api_key=apikey
-        )
-        config_space, _ = get_config_space(config)
-        print('config_space', config_space)
-        task_context = get_task_context(dataset, model, data_loaders)
-        print("task_context", task_context)
-        modified_pipeline_space = get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context', task_context=task_context, config_space=config_space, pipeline_space=pipeline_space)
+        user_wants_to_provide_values = input(
+            "Do you want to provide manual values for hyperparameters, "
+            "ask an LLM or take default values? (manual/llm/default): ").strip().lower()
+        if user_wants_to_provide_values in ['manual', 'm']:
+            print("Manually providing hyperparameters.")
+            modified_pipeline_space = get_pipeline_space_from_user(pipeline_space)
+        elif user_wants_to_provide_values in ['llm', 'l']:
+            print("Asking LLM for hyperparameters.")
+            n_initial_samples = 1
+            client = OpenAI(
+                api_key=apikey
+            )
+            config_space, _ = get_config_space(config)
+            print('config_space', config_space)
+            task_context = get_task_context(dataset, model, data_loaders)
+            print("task_context", task_context)
+            modified_pipeline_space = get_pipeline_space_from_llm(n_initial_samples, client, context='Full_Context', task_context=task_context, config_space=config_space, pipeline_space=pipeline_space)
+        else:
+            print("Getting default values for hyperparameters.")
+            modified_pipeline_space = pipeline_space
+
 
     print('modified_pipeline_space', modified_pipeline_space)
     neps_result = neps.run(
