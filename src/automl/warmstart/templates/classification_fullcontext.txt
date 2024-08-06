@@ -1,0 +1,17 @@
+You are assisting me with automated machine learning using [MODEL] for a [TASK] task. The [TASK] performance is measured using [METRIC].
+The dataset has [NUM_SAMPLES] image samples with dimensions of [IMAGE_SIZE]. Class distribution is [CLASS_DIST].
+The pixel mean is [PIXEL_MEAN] and pixel standard deviation is [PIXEL_STD].
+I’m exploring a subset of hyperparameters detailed as: [CONFIGURATION_AND_TYPE].
+
+Provide [NUM_RECOMMENDATION] diverse and efficient configuration suggestions to commence a Bayesian Optimization procedure aimed at fine-tuning hyperparameters.
+Your proposals will be used as the mena of the prior distributions of the parameters.
+These configurations should be carefully customized to suit the characteristics of the dataset at hand. The dataset description is: [DESCRIPTION].
+Your response should include only a dictionary, where each key is a hyperparameter and its value is the proposed mean of prior distribution for that hyperparameter.
+The dictionary should be wrapped with curly brackets {}.
+Here is an example of the response format:
+{
+    "lr": 0.01,
+    "scheduler_gamma": 90,
+    "scheduler_step_size": 200,
+    "weight_decay": 0.0001,
+}

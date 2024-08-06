@@ -1,0 +1,5 @@
+You are assisting me with automated machine learning using [MODEL].
+I am exploring a subset of architectural choices for the NB201 benchmark, detailed as: [CONFIGURATION_AND_TYPE].
+Please suggest [NUM_RECOMMENDATION] diverse yet effective configurations to initiate an optimization process for architectural tuning.
+You can include ‘None’ in the configurations.
+Your response should include only a list of dictionaries, where each dictionary describes one recommended configuration.
