@@ -6,12 +6,12 @@ from automl.model import Models
 def command_factory(
     name: str,
     dataset: DataSets,
-    epochs: int,
+    epochs: int = 50,
     model: Models = Models.resnet18_1,
     batch_size: int = 64,
 ):
     return (
-        f"python run.py --dataset {dataset.value} --model {model.value}"
+        f"python run.py --dataset {dataset.value} --epochs {epochs} --model {model.value}"
         f" --results-file results/{name}.csv --save-to checkpoints/{name}.pt"
     )
 

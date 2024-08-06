@@ -158,7 +158,7 @@ def get_pipeline_space_randomly(pipeline_space):
     return pipeline_space
 
 
-def run_pipeline(pipeline_directory, previous_pipeline_directory, dataset, model, data_loaders, **config):
+def run_pipeline(pipeline_directory, previous_pipeline_directory, dataset, model, seed, data_loaders, **config):
     start = time()
 
     trainer = Trainer(
@@ -170,6 +170,7 @@ def run_pipeline(pipeline_directory, previous_pipeline_directory, dataset, model
         scheduler_step_size=config["scheduler_step_size"],
         scheduler_step_every_epoch=False,
         weight_decay=config["weight_decay"],
+        seed=seed,
     )
 
     checkpoint_name = "checkpoint.pth"
@@ -178,8 +179,6 @@ def run_pipeline(pipeline_directory, previous_pipeline_directory, dataset, model
         trainer.load(previous_pipeline_directory / checkpoint_name)
     else:
         trainer.epochs_already_trained = 0
-
-    epochs_spent_in_this_call = config["epochs"] - trainer.epochs_already_trained
 
     training_losses, training_accuracies, validation_losses, validation_accuracies, f1s, _ = trainer.train(
         epochs=config["epochs"],
@@ -236,7 +235,8 @@ def optimize_pipeline(
         dataset: DataSets = DataSets.fashion.value,
         model: Models = Models.resnet18_1.value,
         apikey: str = None,
-        random_init: bool = False
+        random_init: bool = False,
+        seed: int = 42
 ):
     data_loaders = get_data_loaders(
         dataset,
@@ -252,6 +252,7 @@ def optimize_pipeline(
             dataset=dataset,
             model=model,
             data_loaders=data_loaders,
+            seed=seed,
             **config
         )
 
@@ -282,7 +283,7 @@ def optimize_pipeline(
 
 
     print('modified_pipeline_space', modified_pipeline_space)
-    neps_result = neps.run(
+    neps.run(
         run_pipeline=wrapped_run_pipeline,
         pipeline_space=modified_pipeline_space,
         root_directory=dataset.factory.__name__ + "_neps",
@@ -291,6 +292,3 @@ def optimize_pipeline(
         max_cost_total=5 * 60 * 60,
         overwrite_working_directory=True,
     )
-
-    # TODO: get best config after neps finishes optimizing
-    return neps_result
