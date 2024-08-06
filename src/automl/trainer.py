@@ -229,6 +229,25 @@ class Trainer:
             f1s.append(f1)
             timing.append(time() - start_time)
 
+        if self.results_file is not None:
+            data = {
+                "epoch": range(1, epochs + 1),
+                "train_loss": losses,
+                "train_accuracy": accuracies,
+                "val_loss": val_losses,
+                "val_accuracy": val_accuracies,
+                "f1": f1s,
+            }
+            with open(self.results_file, "w") as f:
+                f.write(
+                    "epoch,train_loss,train_accuracy,val_loss,val_accuracy,mIoU,f1\n"
+                )
+                for i in range(epochs):
+                    f.write(
+                        f"{data['epoch'][i]},{data['train_loss'][i]},{data['train_accuracy'][i]},{data['val_loss'][i]},"
+                        f"{data['val_accuracy'][i]},{data['f1'][i]}\n"
+                    )
+
         return losses, accuracies, val_losses, val_accuracies, f1s, time() - start_time
 
     def eval_step(
