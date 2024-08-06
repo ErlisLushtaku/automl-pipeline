@@ -2,12 +2,12 @@ import random
 from time import strftime, time
 from enum import Enum
 from pathlib import Path
-from typing import Tuple, Type, List, Union, Optional
+from typing import Tuple, Type, List, Union, Optional, Any
 
 import tqdm
 import torch
 import numpy as np
-from torch import nn, optim
+from torch import nn, optim, Tensor
 from torch.utils.data import DataLoader
 
 class Optimizer(Enum):
@@ -167,7 +167,7 @@ class Trainer:
         epochs: int,
         save_best_to: Union[str, Path, None] = None,
         num_classes: int = None,
-    ) -> Tuple[List[float], List[float], List[float], List[float], float]:
+    ) -> tuple[list[float], list[float], list[float], list[float], list[int | float | bool], float]:
         """Train the model.
 
         Args:
@@ -273,7 +273,7 @@ class Trainer:
         epochs: int = None,
         return_predictions: bool = False,
         num_classes: int = None,
-    ) -> Tuple[float, float, float, float, torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[float, float, int | int | float | float | bool | bool, Tensor, Tensor | None | Any]:
         with torch.no_grad():
             self.model.eval()
 

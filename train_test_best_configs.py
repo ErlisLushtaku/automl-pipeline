@@ -12,13 +12,13 @@ from automl.trainer import Optimizer, Trainer
 app = Typer()
 SEED_DIR_TEMPLATE = "seed_{}/{}/{}"
 
-@app.command()
+
 def train_test_best_configs(
-    dataset: DataSets = DataSets.fashion.value,
-    model: Models = Models.resnet18_1.value,
-    seed: int = 42,
-    batch_size: int = 32,
-    epochs: int = 100,
+        dataset: DataSets = DataSets.fashion.value,
+        model: Models = Models.resnet50_4.value,
+        seed: int = 42,
+        batch_size: int = 32,
+        epochs: int = 100,
 ):
     seed = seed
     best_config = neps.get_summary_dict(dataset.factory.__name__ + "_neps")["best_config"]
@@ -36,11 +36,11 @@ def train_test_best_configs(
     )
 
     data_loaders = get_data_loaders(
-                    dataset,
-                    get_transformations(dataset),
-                    get_augmentations(),
-                    batch_size=batch_size,
-                )
+        dataset,
+        get_transformations(dataset),
+        get_augmentations(),
+        batch_size=batch_size,
+    )
 
     trainer.train(
         epochs=epochs,
@@ -52,7 +52,7 @@ def train_test_best_configs(
 
     trainer.load(SEED_DIR_TEMPLATE.format(seed, dataset, "best_model.pth"))
     if dataset.factory == DataSets.cancer.factory:
-            predictions = trainer.predict(data_loaders.test_loader)
+        predictions = trainer.predict(data_loaders.test_loader)
     else:
         test_loss, test_accuracy, test_f1, confusion_matrix, predictions = trainer.eval(
             data_loaders.test_loader,
@@ -70,6 +70,3 @@ def train_test_best_configs(
 
     with open(SEED_DIR_TEMPLATE.format(seed, dataset, "predictions.npy"), "wb") as f:
         np.save(f, predictions.cpu().numpy())
-
-if __name__ == "__main__":
-    app()
