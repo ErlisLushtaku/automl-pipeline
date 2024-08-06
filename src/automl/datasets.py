@@ -122,7 +122,7 @@ class DataSets(Enum):
     emotions = "emotions"
     flowers = "flowers"
     fashion = "fashion"
-    cancer = "cancer"
+    cancer = "skincancer"
 
     @property
     def factory(self) -> Type[BaseVisionDataset]:
