@@ -50,7 +50,7 @@ python run.py --dataset {dataset}
 ```
 Our pipeline is able to accept also other options from the user, such as:
 
-* model - the type of architechture the model is trained on (Resnet50 by default).
+* model - the type of architechture the model is trained on (check src/automl/model.py for supported models).
 * api_key - the ChatGPT API key, if using the LLM to generate the intial hyperparameter values.
 * random_init - the boolean that decides if the pipeline should start with random parameters.
 * seed - the number of seed.
