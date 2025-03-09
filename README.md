@@ -1,7 +1,7 @@
 # AutoML Exam - SS24 (Vision Data)
 
 This repo serves as a presentation for the exam assignment of the AutoML SS24 course
-at the University of Freiburg.
+at the University of Freiburg. See [final_poster_vision.pdf](https://github.com/ErlisLushtaku/automl-pipeline/blob/main/final_poster_vision.pdf) to view the presentation and the results.
 
 ## Installation
 
